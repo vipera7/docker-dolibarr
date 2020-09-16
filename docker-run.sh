@@ -129,12 +129,26 @@ function migrateDatabase()
 
   echo "" > /var/www/documents/migration_error.html
   pushd /var/www/htdocs/install > /dev/null
-  php upgrade.php ${INSTALLED_VERSION} ${TARGET_VERSION} >> /var/www/documents/migration_error.html 2>&1 && \
-  php upgrade2.php ${INSTALLED_VERSION} ${TARGET_VERSION} >> /var/www/documents/migration_error.html 2>&1 && \
-  php step5.php ${INSTALLED_VERSION} ${TARGET_VERSION} >> /var/www/documents/migration_error.html 2>&1
-  r=$?
+  
+  CURRENT_MAJOR_VERSION=$(echo ${INSTALLED_VERSION} | cut -d. -f1)
+  NEW_MAJOR_VERSION=$(echo ${TARGET_VERSION} | cut -d. -f1)
+  
+  for major in `seq ${CURRENT_MAJOR_VERSION[0]} ${NEW_MAJOR_VERSION}`
+  do
+      if [[ "${CURRENT_MAJOR_VERSION[0]}" -eq "$major" ]]; then
+          php upgrade.php ${INSTALLED_VERSION} $((major+1)).0.0 >> /var/www/documents/migration_error.html 2>&1 && \
+          php upgrade2.php ${INSTALLED_VERSION} $((major+1)).0.0 >> /var/www/documents/migration_error.html 2>&1 && \
+          php step5.php ${INSTALLED_VERSION} $((major+1)).0.0 >> /var/www/documents/migration_error.html 2>&1
+          r=$?
+      elif [[ $((major+1)) != $((NEW_MAJOR_VERSION+1)) ]]; then
+          php upgrade.php ${major}.0.0 $((major+1)).0.0 >> /var/www/documents/migration_error.html 2>&1 && \
+          php upgrade2.php ${major}.0.0 $((major+1)).0.0 >> /var/www/documents/migration_error.html 2>&1 && \
+          php step5.php ${major}.0.0 $((major+1)).0.0 >> /var/www/documents/migration_error.html 2>&1
+          r=$?
+      fi
+  done 
+  CURRENT_MAJOR_VERSION=$(echo ${INSTALLED_VERSION} | cut -d. -f1)
   popd > /dev/null
-
   if [[ ${r} -ne 0 ]]; then
     echo "Migration failed ... Restoring DB ... check file /var/www/documents/migration_error.html for more info on error ..."
     mysql -u ${DOLI_DB_USER} -p${DOLI_DB_PASSWORD} -h ${DOLI_DB_HOST} ${DOLI_DB_NAME} < /var/www/documents/dump.sql
